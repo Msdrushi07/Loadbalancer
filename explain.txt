@@ -106,6 +106,7 @@ RestTemplateConfig.java
 public class RestTemplateConfig {
     @Bean
     @LoadBalanced   // 👈 Enables Spring Cloud LoadBalancer
+if web client object is created same use @LoadBalanced above web client object and rest all same
     public RestTemplate restTemplate() {
         return new RestTemplate();
     }
