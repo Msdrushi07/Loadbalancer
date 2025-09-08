@@ -1,0 +1,216 @@
+Perfect 🚀 let’s build a minimal working example of Spring Cloud LoadBalancer with 2 services so you can see how it works in practice.
+
+
+---
+
+client side load balancing 
+whenever we consume api rest template/web client 
+
+🔹 Example: Order Service calls User Service
+
+We’ll have two microservices:
+
+1. user-service → returns user details.
+
+
+2. order-service → calls user-service using Spring Cloud LoadBalancer.
+
+
+
+
+---
+
+1. user-service (Producer)
+
+pom.xml
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+</dependencies>
+
+application.yml
+
+server:
+  port: 0  # 0 means random port (so we can run multiple instances)
+
+spring:
+  application:
+    name: user-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+UserController.java
+
+@RestController
+@RequestMapping("/users")
+public class UserController {
+
+    @GetMapping("/{id}")
+    public String getUser(@PathVariable String id) {
+        return "User " + id + " served from instance on port: " + 
+               System.getProperty("server.port");
+    }
+}
+
+👉 If you run 2 instances of user-service, both will register in Eureka.
+
+
+---
+
+2. order-service (Consumer)
+
+pom.xml
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+    </dependency>
+</dependencies>
+
+application.yml
+
+server:
+  port: 8082
+
+spring:
+  application:
+    name: order-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+RestTemplateConfig.java
+
+@Configuration
+public class RestTemplateConfig {
+    @Bean
+    @LoadBalanced   // 👈 Enables Spring Cloud LoadBalancer
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+
+OrderController.java
+
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    private final RestTemplate restTemplate;
+
+    public OrderController(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
+    @GetMapping("/{id}")
+    public String getOrder(@PathVariable String id) {
+        // Call user-service via Eureka + LoadBalancer
+        String userResponse = restTemplate.getForObject(
+                "http://user-service/users/" + id,
+                String.class
+        );
+        return "Order " + id + " placed by -> " + userResponse;
+    }
+}
+
+
+---
+
+3. Eureka Server (Service Registry)
+
+Create a simple Eureka Server project.
+
+pom.xml
+
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+</dependency>
+
+EurekaServerApp.java
+
+@SpringBootApplication
+@EnableEurekaServer
+public class EurekaServerApp {
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaServerApp.class, args);
+    }
+}
+
+application.yml
+
+server:
+  port: 8761
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+
+
+---
+
+4. Run & Test
+
+1. Start Eureka Server (http://localhost:8761).
+
+
+2. Start 2 instances of user-service (both will show up in Eureka).
+
+
+3. Start order-service.
+
+
+4. Call:
+
+http://localhost:8082/orders/101
+
+Response (round robin load balancing):
+
+Order 101 placed by -> User 101 served from instance on port: 54732
+Order 101 placed by -> User 101 served from instance on port: 54745
+
+
+
+👉 Requests get distributed across multiple user-service instances via Spring Cloud LoadBalancer.
+
+
+---
+
+✅ Summary:
+
+user-service has multiple instances.
+
+Registered with Eureka.
+
+order-service uses Spring Cloud LoadBalancer (@LoadBalanced RestTemplate) to call user-service.
+
+Requests get balanced client-side across all user-service instances.
+
+
+
+---
+
+Do you want me to also show you the same example using Spring Cloud Gateway + Eureka (so you see how Gateway does load balancing for external traffic)?
+
